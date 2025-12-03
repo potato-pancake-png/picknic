@@ -56,28 +56,28 @@ export function StudentIdVerification({ onComplete, onBack }: StudentIdVerificat
   };
 
   const handleVerify = async () => {
-    if (!schoolName) {
-      toast.error("학교를 선택해주세요");
-      return;
-    }
-    if (!studentName) {
-      toast.error("이름을 입력해주세요");
-      return;
-    }
-    if (!selectedFile) {
-      toast.error("학생증 이미지를 업로드해주세요");
-      return;
-    }
+    // if (!schoolName) {
+    //   toast.error("학교를 선택해주세요");
+    //   return;
+    // }
+    // if (!studentName) {
+    //   toast.error("이름을 입력해주세요");
+    //   return;
+    // }
+    // if (!selectedFile) {
+    //   toast.error("학생증 이미지를 업로드해주세요");
+    //   return;
+    // }
 
     setIsVerifying(true);
     
     setTimeout(() => {
         setIsVerifying(false);
-        toast.success(`${schoolName} 학생 인증이 완료되었습니다! 🎉`);
+        // toast.success(`${schoolName} 학생 인증이 완료되었습니다! 🎉`);
         setTimeout(() => {
-            onComplete(schoolName);
+            onComplete(schoolName || "테스트학교");
         }, 500);
-    }, 2500);
+    }, 1000);
   };
 
   return (
@@ -215,7 +215,7 @@ export function StudentIdVerification({ onComplete, onBack }: StudentIdVerificat
             {/* Submit Button */}
             <Button
               onClick={handleVerify}
-              disabled={!schoolName || !studentName || !selectedFile || isVerifying}
+              disabled={isVerifying}
               className="w-full h-14 rounded-xl text-base font-medium bg-gradient-to-r from-lime-500 to-emerald-500 hover:from-lime-600 hover:to-emerald-600 text-black border-0 shadow-lg shadow-lime-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-[1.02]"
             >
               {isVerifying ? (
