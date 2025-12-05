@@ -69,6 +69,9 @@ export function SignupPage({
     const [isLoading, setIsLoading] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
+    const [isVerifying, setIsVerifying] = useState(false);
+    const [verificationStatus, setVerificationStatus] = useState<'idle' | 'verifying' | 'success' | 'failed'>('idle');
+    const [verificationMessage, setVerificationMessage] = useState<string>('');
     const [errors, setErrors] = useState({
         email: "",
         password: "",
@@ -190,6 +193,52 @@ export function SignupPage({
         });
     };
 
+    const verifyStudentCard = async (file: File) => {
+        if (!formData.schoolName) {
+            toast.error("먼저 학교를 선택해주세요.");
+            return;
+        }
+        if (!formData.studentName) {
+            toast.error("먼저 이름을 입력해주세요.");
+            return;
+        }
+
+        setIsVerifying(true);
+        setVerificationStatus('verifying');
+        setVerificationMessage('학생증을 인증하는 중입니다...');
+
+        try {
+            const formDataToSend = new FormData();
+            formDataToSend.append('file', file);
+            formDataToSend.append('schoolName', formData.schoolName);
+            formDataToSend.append('studentName', formData.studentName);
+
+            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/auth/verify-student-card`, {
+                method: 'POST',
+                body: formDataToSend,
+            });
+
+            const result = await response.json();
+
+            if (result.verified) {
+                setVerificationStatus('success');
+                setVerificationMessage(result.message);
+                toast.success(result.message);
+            } else {
+                setVerificationStatus('failed');
+                setVerificationMessage(result.message);
+                toast.error(result.message);
+            }
+        } catch (error: any) {
+            setVerificationStatus('failed');
+            setVerificationMessage('학생증 인증 중 오류가 발생했습니다.');
+            toast.error('학생증 인증 중 오류가 발생했습니다.');
+            console.error('Verification error:', error);
+        } finally {
+            setIsVerifying(false);
+        }
+    };
+
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -204,7 +253,9 @@ export function SignupPage({
             setSelectedFile(file);
             const url = URL.createObjectURL(file);
             setPreviewUrl(url);
-            toast.success("이미지가 업로드되었습니다.");
+            setVerificationStatus('idle');
+            setVerificationMessage('');
+            toast.success("이미지가 업로드되었습니다. '인증하기' 버튼을 눌러주세요.");
         }
     };
 
@@ -212,6 +263,8 @@ export function SignupPage({
         e.stopPropagation();
         setSelectedFile(null);
         setPreviewUrl(null);
+        setVerificationStatus('idle');
+        setVerificationMessage('');
         if (fileInputRef.current) {
             fileInputRef.current.value = "";
         }
@@ -695,6 +748,86 @@ export function SignupPage({
                                             학교명과 성명이 빛 반사 없이 선명하게 보이도록 촬영해주세요.
                                         </p>
                                     </div>
+
+                                    {/* Verification Button & Status */}
+                                    {selectedFile && (
+                                        <div className="space-y-3">
+                                            <Button
+                                                onClick={() => verifyStudentCard(selectedFile)}
+                                                disabled={isVerifying || verificationStatus === 'success'}
+                                                className={`w-full h-12 rounded-lg transition-all ${
+                                                    verificationStatus === 'success'
+                                                        ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                                                        : verificationStatus === 'failed'
+                                                        ? 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white'
+                                                        : 'bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white'
+                                                }`}
+                                            >
+                                                {isVerifying ? (
+                                                    <>
+                                                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                                                        인증 중...
+                                                    </>
+                                                ) : verificationStatus === 'success' ? (
+                                                    <>
+                                                        <Check className="w-5 h-5 mr-2" />
+                                                        인증 완료
+                                                    </>
+                                                ) : verificationStatus === 'failed' ? (
+                                                    <>
+                                                        <X className="w-5 h-5 mr-2" />
+                                                        다시 인증하기
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Sparkles className="w-5 h-5 mr-2" />
+                                                        학생증 인증하기
+                                                    </>
+                                                )}
+                                            </Button>
+
+                                            {/* Verification Result Card */}
+                                            {verificationStatus !== 'idle' && (
+                                                <div className={`p-4 rounded-xl border-2 transition-all ${
+                                                    verificationStatus === 'success'
+                                                        ? 'border-emerald-500 bg-emerald-500/10'
+                                                        : verificationStatus === 'failed'
+                                                        ? 'border-red-500 bg-red-500/10'
+                                                        : 'border-blue-500 bg-blue-500/10'
+                                                }`}>
+                                                    <div className="flex items-start gap-3">
+                                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                                            verificationStatus === 'success'
+                                                                ? 'bg-emerald-500'
+                                                                : verificationStatus === 'failed'
+                                                                ? 'bg-red-500'
+                                                                : 'bg-blue-500'
+                                                        }`}>
+                                                            {verificationStatus === 'verifying' && <Loader2 className="w-5 h-5 text-white animate-spin" />}
+                                                            {verificationStatus === 'success' && <Check className="w-5 h-5 text-white" />}
+                                                            {verificationStatus === 'failed' && <X className="w-5 h-5 text-white" />}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <h4 className={`font-bold text-sm mb-1 ${
+                                                                verificationStatus === 'success'
+                                                                    ? 'text-emerald-400'
+                                                                    : verificationStatus === 'failed'
+                                                                    ? 'text-red-400'
+                                                                    : 'text-blue-400'
+                                                            }`}>
+                                                                {verificationStatus === 'verifying' && '인증 진행 중'}
+                                                                {verificationStatus === 'success' && '인증 성공'}
+                                                                {verificationStatus === 'failed' && '인증 실패'}
+                                                            </h4>
+                                                            <p className="text-xs text-white/80">
+                                                                {verificationMessage}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="flex gap-3 pt-4">
@@ -707,9 +840,9 @@ export function SignupPage({
                                         이전
                                     </Button>
                                     <Button
-                                        className="flex-1 h-14 bg-gradient-to-r from-lime-400 to-emerald-500 hover:from-lime-500 hover:to-emerald-600 text-black font-bold rounded-xl transition-all shadow-lg shadow-lime-500/20 hover:shadow-lime-500/40 hover:scale-[1.02] active:scale-[0.98]"
+                                        className="flex-1 h-14 bg-gradient-to-r from-lime-400 to-emerald-500 hover:from-lime-500 hover:to-emerald-600 text-black font-bold rounded-xl transition-all shadow-lg shadow-lime-500/20 hover:shadow-lime-500/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                                         onClick={handleSubmit}
-                                        disabled={isLoading || !formData.schoolName || !formData.studentName || !selectedFile}
+                                        disabled={isLoading || !formData.schoolName || !formData.studentName || !selectedFile || verificationStatus !== 'success'}
                                     >
                                         {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
                                             <span className="flex items-center gap-2">

@@ -12,6 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 /**
  * 사용자 프로필 관리 서비스
  */
@@ -72,37 +74,65 @@ public class UserService {
 
     /**
      * 실제 랭킹 계산 (시스템 계정 및 학교 미인증 사용자 제외)
-     * RankingService와 동일한 로직 사용
+     * RankingService와 동일한 DB 기반 로직 사용
      *
      * @param userId 사용자 ID
      * @return 실제 랭킹 (1-based)
      */
     private Long calculateActualRank(String userId) {
         try {
-            // Get all users from Redis leaderboard
-            var allUserIds = redisUtil.getTopRankers("leaderboard:weekly", 0, -1);
-            int actualRank = 1;
+            // 1. DB에서 유효한 모든 사용자 조회
+            List<User> allValidUsers = userRepository.findAll().stream()
+                    .filter(user -> !user.getIsSystemAccount())
+                    .filter(user -> user.getSchoolName() != null && !user.getSchoolName().trim().isEmpty())
+                    .toList();
 
-            for (String otherId : allUserIds) {
-                if (otherId.equals(userId)) {
-                    return (long) actualRank;
-                }
+            // 2. 각 사용자의 UserPoint 조회
+            List<String> userIds = allValidUsers.stream()
+                    .map(User::getEmail)
+                    .toList();
 
-                // Count only valid users (not system accounts and have school)
-                User otherUser = userRepository.findByEmail(otherId).orElse(null);
-                if (otherUser == null || otherUser.getIsSystemAccount() ||
-                    otherUser.getSchoolName() == null || otherUser.getSchoolName().trim().isEmpty()) {
-                    continue; // Skip invalid users
-                }
+            List<com.picknic.backend.domain.UserPoint> userPoints = userPointRepository.findAllByUserIdIn(userIds);
+            java.util.Map<String, com.picknic.backend.domain.UserPoint> userPointMap = userPoints.stream()
+                    .collect(java.util.stream.Collectors.toMap(com.picknic.backend.domain.UserPoint::getUserId, up -> up));
 
-                // This user is valid and ranked above me, increment rank
-                actualRank++;
+            // 3. 각 사용자의 포인트로 정렬
+            java.util.List<UserWithPoints> userWithPointsList = new java.util.ArrayList<>();
+            for (User user : allValidUsers) {
+                com.picknic.backend.domain.UserPoint userPoint = userPointMap.getOrDefault(
+                        user.getEmail(),
+                        new com.picknic.backend.domain.UserPoint(user.getEmail())
+                );
+                userWithPointsList.add(new UserWithPoints(user.getEmail(), userPoint.getTotalAccumulatedPoints()));
             }
 
-            return (long) actualRank;
+            // 포인트 기준으로 정렬 (내림차순)
+            userWithPointsList.sort((a, b) -> Long.compare(b.points, a.points));
+
+            // 4. 내 순위 찾기
+            for (int i = 0; i < userWithPointsList.size(); i++) {
+                if (userWithPointsList.get(i).userId.equals(userId)) {
+                    return (long) (i + 1);
+                }
+            }
+
+            return null; // 유효한 사용자가 아닌 경우
         } catch (Exception e) {
             log.error("랭킹 계산 실패 - userId: {}", userId, e);
             return null;
+        }
+    }
+
+    /**
+     * 사용자와 포인트를 결합한 헬퍼 클래스 (정렬용)
+     */
+    private static class UserWithPoints {
+        final String userId;
+        final long points;
+
+        UserWithPoints(String userId, long points) {
+            this.userId = userId;
+            this.points = points;
         }
     }
 }

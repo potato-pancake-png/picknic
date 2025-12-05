@@ -8,6 +8,7 @@ import com.picknic.backend.dto.auth.UserSignupDto;
 import com.picknic.backend.entity.User;
 import com.picknic.backend.repository.UserRepository;
 import com.picknic.backend.service.AuthService;
+import com.picknic.backend.service.StudentCardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +27,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final UserRepository userRepository;
+    private final StudentCardService studentCardService;
 
     @Value("${aws.cognito.domain}")
     private String cognitoDomain;
@@ -109,5 +111,35 @@ public class AuthController {
                 URLEncoder.encode(callbackUrl, StandardCharsets.UTF_8)
         );
         return ResponseEntity.ok(Map.of("url", loginUrl));
+    }
+
+    // NEW: Student card verification endpoint
+    @PostMapping("/verify-student-card")
+    public ResponseEntity<?> verifyStudentCard(
+            @RequestParam("schoolName") String schoolName,
+            @RequestParam("studentName") String studentName,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file
+    ) {
+        try {
+            boolean isVerified = studentCardService.verifyStudent(schoolName, studentName, file);
+
+            if (isVerified) {
+                return ResponseEntity.ok(Map.of(
+                    "verified", true,
+                    "message", "학생증 인증에 성공했습니다!"
+                ));
+            } else {
+                return ResponseEntity.ok(Map.of(
+                    "verified", false,
+                    "message", "학생증 인증에 실패했습니다. 학교명과 이름이 선명하게 보이는지 확인해주세요."
+                ));
+            }
+        } catch (Exception e) {
+            System.err.println("Student card verification error: " + e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "verified", false,
+                "message", "학생증 인증 중 오류가 발생했습니다: " + e.getMessage()
+            ));
+        }
     }
 }

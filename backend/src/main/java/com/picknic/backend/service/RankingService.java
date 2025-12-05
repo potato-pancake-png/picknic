@@ -34,6 +34,8 @@ public class RankingService {
      *
      * API Spec: Section 4.1 - GET /rankings/personal
      *
+     * DB 기반으로 모든 사용자를 조회하여 0포인트 사용자도 포함
+     *
      * @param userId 현재 사용자 ID
      * @param limit 조회할 랭커 수 (default: 20)
      * @param offset 시작 위치 (default: 0)
@@ -43,77 +45,69 @@ public class RankingService {
     public PersonalRankingResponse getPersonalRanking(String userId, int limit, int offset) {
         log.info("개인 랭킹 조회 요청 - userId: {}, limit: {}, offset: {}", userId, limit, offset);
 
-        // 1. Redis에서 Top N userId 조회 (ZREVRANGE)
-        Set<String> topUserIds = redisUtil.getTopRankers("leaderboard:weekly", offset, offset + limit - 1);
+        // 1. DB에서 유효한 모든 사용자 조회 (학교가 있고, 시스템 계정이 아닌)
+        List<User> allValidUsers = userRepository.findAll().stream()
+                .filter(user -> !user.getIsSystemAccount())
+                .filter(user -> user.getSchoolName() != null && !user.getSchoolName().trim().isEmpty())
+                .toList();
 
-        // 2. 일괄 조회: User와 UserPoint를 한 번에 가져오기 (N+1 문제 해결)
-        List<String> topUserIdList = new ArrayList<>(topUserIds);
-        List<User> users = userRepository.findAllByEmailIn(topUserIdList);
-        List<UserPoint> userPoints = userPointRepository.findAllByUserIdIn(topUserIdList);
+        // 2. 각 사용자의 UserPoint 조회하여 Map 생성
+        List<String> userIds = allValidUsers.stream()
+                .map(User::getEmail)
+                .toList();
 
-        // Map으로 변환하여 빠른 조회
-        java.util.Map<String, User> userMap = users.stream()
-                .collect(java.util.stream.Collectors.toMap(User::getEmail, u -> u));
+        List<UserPoint> userPoints = userPointRepository.findAllByUserIdIn(userIds);
         java.util.Map<String, UserPoint> userPointMap = userPoints.stream()
                 .collect(java.util.stream.Collectors.toMap(UserPoint::getUserId, up -> up));
 
-        // 3. RankerDto 구성
-        List<RankerDto> topRankers = new ArrayList<>();
-        int displayRank = 1; // 표시할 순위 (skip된 항목 제외)
+        // 3. User와 UserPoint를 결합 (정렬 전에는 순위 없이)
+        List<UserWithPoints> userWithPointsList = new ArrayList<>();
 
-        for (String topUserId : topUserIds) {
-            // Skip system accounts and users without school from rankings
-            User user = userMap.get(topUserId);
-            if (user == null || user.getIsSystemAccount() || user.getSchoolName() == null || user.getSchoolName().trim().isEmpty()) {
-                continue;
-            }
-
-            UserPoint userPoint = userPointMap.getOrDefault(topUserId, new UserPoint(topUserId));
-
-            RankerDto rankerDto = RankerDto.builder()
-                    .userId(topUserId)
-                    .username(user.getNickname())
-                    .points(userPoint.getTotalAccumulatedPoints())
-                    .rank(displayRank++)
-                    .build();
-
-            topRankers.add(rankerDto);
+        for (User user : allValidUsers) {
+            UserPoint userPoint = userPointMap.getOrDefault(user.getEmail(), new UserPoint(user.getEmail()));
+            userWithPointsList.add(new UserWithPoints(
+                    user.getEmail(),
+                    user.getNickname(),
+                    userPoint.getTotalAccumulatedPoints()
+            ));
         }
 
-        // 4. 내 랭킹 정보 조회
+        // 포인트 기준으로 정렬 (내림차순)
+        userWithPointsList.sort((a, b) -> Long.compare(b.points, a.points));
+
+        // 정렬 후 RankerDto 생성 (순위 할당)
+        List<RankerDto> allRankers = new ArrayList<>();
+        for (int i = 0; i < userWithPointsList.size(); i++) {
+            UserWithPoints user = userWithPointsList.get(i);
+            allRankers.add(RankerDto.builder()
+                    .userId(user.userId)
+                    .username(user.username)
+                    .points(user.points)
+                    .rank(i + 1)
+                    .build());
+        }
+
+        // 4. offset과 limit에 맞게 슬라이싱
+        List<RankerDto> topRankers = allRankers.stream()
+                .skip(offset)
+                .limit(limit)
+                .toList();
+
+        // 5. 내 랭킹 정보 조회
         UserPoint myUserPoint = userPointRepository.findByUserId(userId)
                 .orElse(new UserPoint(userId));
 
-        // Get my nickname
         String myUsername = userRepository.findByEmail(userId)
                 .map(User::getNickname)
                 .orElse("User_" + userId);
 
-        // Calculate my actual rank by counting valid users above me
+        // 내 순위 찾기
         Long myActualRank = null;
-        Set<String> allUserIds = redisUtil.getTopRankers("leaderboard:weekly", 0, -1); // Get all users from Redis
-
-        // 일괄 조회: 모든 사용자 정보를 한 번에 가져오기 (N+1 문제 해결)
-        List<String> allUserIdList = new ArrayList<>(allUserIds);
-        List<User> allUsers = userRepository.findAllByEmailIn(allUserIdList);
-        java.util.Map<String, User> allUserMap = allUsers.stream()
-                .collect(java.util.stream.Collectors.toMap(User::getEmail, u -> u));
-
-        int actualRank = 1;
-        for (String otherId : allUserIds) {
-            if (otherId.equals(userId)) {
-                myActualRank = (long) actualRank;
+        for (int i = 0; i < allRankers.size(); i++) {
+            if (allRankers.get(i).getUserId().equals(userId)) {
+                myActualRank = (long) (i + 1);
                 break;
             }
-
-            // Count only valid users (not system accounts and have school)
-            User otherUser = allUserMap.get(otherId);
-            if (otherUser == null || otherUser.getIsSystemAccount() || otherUser.getSchoolName() == null || otherUser.getSchoolName().trim().isEmpty()) {
-                continue; // Skip invalid users
-            }
-
-            // This user is valid and ranked above me, increment rank
-            actualRank++;
         }
 
         MyRankDto myRank = MyRankDto.builder()
@@ -122,7 +116,7 @@ public class RankingService {
                 .username(myUsername)
                 .build();
 
-        // 5. 응답 구성
+        // 6. 응답 구성
         PersonalRankingResponse response = PersonalRankingResponse.builder()
                 .topRankers(topRankers)
                 .myRank(myRank)
@@ -209,5 +203,20 @@ public class RankingService {
         log.info("학교별 랭킹 조회 완료 - Top {} 학교", topSchools.size());
 
         return response;
+    }
+
+    /**
+     * 사용자와 포인트를 결합한 헬퍼 클래스 (정렬용)
+     */
+    private static class UserWithPoints {
+        final String userId;
+        final String username;
+        final long points;
+
+        UserWithPoints(String userId, String username, long points) {
+            this.userId = userId;
+            this.username = username;
+            this.points = points;
+        }
     }
 }

@@ -17,15 +17,16 @@ interface SchoolSelectorProps {
 export function SchoolSelector({ value, onChange, className }: SchoolSelectorProps) {
   const [schools, setSchools] = useState<School[]>([]);
   const [filteredSchools, setFilteredSchools] = useState<School[]>([]);
-  const [regions, setRegions] = useState<string[]>([]);
 
-  const [selectedType, setSelectedType] = useState<'HIGH' | 'MIDDLE' | ''>('');
-  const [selectedRegion, setSelectedRegion] = useState<string>('');
+  const [selectedType, setSelectedType] = useState<'HIGH' | 'MIDDLE' | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 성능 최적화: 렌더링할 최대 학교 수
+  const MAX_DISPLAY_SCHOOLS = 100;
 
   // Load schools on mount
   useEffect(() => {
@@ -35,11 +36,6 @@ export function SchoolSelector({ value, onChange, className }: SchoolSelectorPro
         const data = await schoolService.getAllSchools();
         setSchools(data);
         setFilteredSchools(data);
-
-        // Extract unique regions
-        const uniqueRegions = schoolService.getUniqueRegions(data);
-        setRegions(uniqueRegions);
-
         setError(null);
       } catch (err) {
         setError('학교 목록을 불러오는데 실패했습니다.');
@@ -57,22 +53,24 @@ export function SchoolSelector({ value, onChange, className }: SchoolSelectorPro
     if (schools.length === 0) return;
 
     const filtered = schoolService.filterSchools(schools, {
-      type: selectedType || undefined,
-      region: selectedRegion || undefined,
+      type: selectedType === 'all' ? undefined : selectedType,
       searchTerm: searchTerm,
     });
 
     setFilteredSchools(filtered);
-  }, [schools, selectedType, selectedRegion, searchTerm]);
+  }, [schools, selectedType, searchTerm]);
 
   // Reset filters
   const handleResetFilters = () => {
-    setSelectedType('');
-    setSelectedRegion('');
+    setSelectedType('all');
     setSearchTerm('');
   };
 
-  const hasActiveFilters = selectedType || selectedRegion;
+  const hasActiveFilters = selectedType !== 'all';
+
+  // 성능 최적화: 표시할 학교 목록 제한
+  const displaySchools = filteredSchools.slice(0, MAX_DISPLAY_SCHOOLS);
+  const hasMoreSchools = filteredSchools.length > MAX_DISPLAY_SCHOOLS;
 
   return (
     <div className={cn('space-y-3', className)}>
@@ -93,44 +91,21 @@ export function SchoolSelector({ value, onChange, className }: SchoolSelectorPro
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          {/* Type Filter */}
-          <Select value={selectedType} onValueChange={(val) => setSelectedType(val as any)}>
-            <SelectTrigger className="h-9 bg-white/5 border-white/10 text-white text-sm rounded-lg">
-              <SelectValue placeholder="학교 구분" />
-            </SelectTrigger>
-            <SelectContent className="bg-black border-white/50 text-white">
-              <SelectItem value="">전체</SelectItem>
-              <SelectItem value="HIGH">고등학교</SelectItem>
-              <SelectItem value="MIDDLE">중학교</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Region Filter */}
-          <Select value={selectedRegion} onValueChange={setSelectedRegion}>
-            <SelectTrigger className="h-9 bg-white/5 border-white/10 text-white text-sm rounded-lg">
-              <SelectValue placeholder="지역" />
-            </SelectTrigger>
-            <SelectContent className="bg-black border-white/50 text-white max-h-[300px]">
-              <SelectItem value="">전체</SelectItem>
-              {regions.map((region) => (
-                <SelectItem key={region} value={region}>
-                  {region}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* Type Filter */}
+        <Select value={selectedType} onValueChange={(val) => setSelectedType(val as any)}>
+          <SelectTrigger className="h-9 bg-white/5 border-white/10 text-white text-sm rounded-lg">
+            <SelectValue placeholder="학교 구분" />
+          </SelectTrigger>
+          <SelectContent className="bg-black border-white/50 text-white">
+            <SelectItem value="all">전체</SelectItem>
+            <SelectItem value="HIGH">고등학교</SelectItem>
+            <SelectItem value="MIDDLE">중학교</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* School Selection with Command */}
       <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <Label className="text-white/60 text-xs">
-            {isLoading ? '로딩 중...' : `${filteredSchools.length}개 학교`}
-          </Label>
-        </div>
-
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button
@@ -167,7 +142,7 @@ export function SchoolSelector({ value, onChange, className }: SchoolSelectorPro
                   )}
                 </CommandEmpty>
                 <CommandGroup>
-                  {filteredSchools.map((school) => (
+                  {displaySchools.map((school) => (
                     <CommandItem
                       key={school.id}
                       value={school.name}
@@ -186,7 +161,7 @@ export function SchoolSelector({ value, onChange, className }: SchoolSelectorPro
                       <div className="flex flex-col">
                         <span className="font-medium">{school.name}</span>
                         <span className="text-xs text-white/40">
-                          {school.region} · {school.type === 'HIGH' ? '고등학교' : '중학교'}
+                          {school.type === 'HIGH' ? '고등학교' : '중학교'}
                         </span>
                       </div>
                     </CommandItem>
