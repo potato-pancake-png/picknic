@@ -202,20 +202,27 @@ public class PointService {
                 LocalDate.now().toString(),
                 userId);
 
-        // Redis INCR로 카운트 증가
-        Long currentCount = redisUtil.incrementCounterWithLimit(limitKey, TTL_24_HOURS);
-
-        // 제한 체크
+        // 제한값
         int limit = (type == PointType.VOTE) ? VOTE_DAILY_LIMIT : CREATE_DAILY_LIMIT;
 
-        if (currentCount != null && currentCount > limit) {
+        // 먼저 현재 카운트 조회 (카운터 증가시키지 않음)
+        Long currentCount = redisUtil.getCounter(limitKey);
+        if (currentCount == null) {
+            currentCount = 0L;
+        }
+
+        // 제한 체크 - 이미 제한에 도달했으면 false 반환 (카운터 증가하지 않음)
+        if (currentCount >= limit) {
             log.info("일일 제한 초과 - userId: {}, type: {}, count: {}/{}",
                     userId, type, currentCount, limit);
             return false;
         }
 
+        // 제한 내라면 카운터 증가
+        Long newCount = redisUtil.incrementCounterWithLimit(limitKey, TTL_24_HOURS);
+
         log.debug("일일 제한 체크 통과 - userId: {}, type: {}, count: {}/{}",
-                userId, type, currentCount, limit);
+                userId, type, newCount, limit);
         return true;
     }
 

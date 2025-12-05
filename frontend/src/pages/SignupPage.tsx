@@ -13,6 +13,7 @@ interface SignupPageProps {
     email: string;
     providerId: string;
     onSignupSuccess: (user: any) => void;
+    onBackToLogin?: () => void;
     mode?: 'signup' | 'complete-profile'; // 추가
 }
 
@@ -45,6 +46,7 @@ export function SignupPage({
     email: initialEmail,
     providerId,
     onSignupSuccess,
+    onBackToLogin,
     mode = 'signup'
 }: SignupPageProps) {
     const isOAuthSignup = providerId && providerId !== "local";
@@ -453,6 +455,21 @@ export function SignupPage({
                                     다음 단계로
                                     <ArrowRight className="w-4 h-4 ml-2" />
                                 </Button>
+
+                                {/* Back to Login Link */}
+                                {onBackToLogin && (
+                                    <div className="mt-6 text-center">
+                                        <p className="text-white/40 text-sm">
+                                            이미 계정이 있으신가요?{" "}
+                                            <button
+                                                onClick={onBackToLogin}
+                                                className="text-lime-400 hover:text-lime-300 font-semibold hover:underline transition-all ml-1"
+                                            >
+                                                로그인
+                                            </button>
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         )}
 

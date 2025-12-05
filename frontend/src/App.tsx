@@ -102,8 +102,6 @@ export default function App() {
       // Load daily limit
       const limit = await pointService.getDailyLimit();
       setDailyLimit(limit);
-
-      console.log('Initial data loaded successfully');
     } catch (error) {
       console.error('Failed to load initial data:', error);
       toast.error('데이터를 불러오는데 실패했습니다.');
@@ -165,6 +163,11 @@ export default function App() {
     toast.success("프로필 완성이 완료되었습니다!");
   };
 
+  const handleBackToLogin = () => {
+    setAuthStep("LOGIN");
+    setSignupData(null);
+  };
+
   if (authStep === "LOGIN") {
     return (
       <>
@@ -182,6 +185,7 @@ export default function App() {
           email={signupData.email}
           providerId={signupData.providerId}
           onSignupSuccess={handleSignupSuccess}
+          onBackToLogin={handleBackToLogin}
         />
       </>
     );

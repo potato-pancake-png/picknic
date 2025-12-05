@@ -11,6 +11,8 @@ import java.util.Optional;
 public interface UserPointRepository extends JpaRepository<UserPoint, String> {
     Optional<UserPoint> findByUserId(String userId);
 
+    List<UserPoint> findAllByUserIdIn(List<String> userIds);
+
     /**
      * 학교별 포인트 합산 조회 (schoolName이 null이 아닌 경우만)
      *

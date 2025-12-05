@@ -46,19 +46,29 @@ public class RankingService {
         // 1. Redis에서 Top N userId 조회 (ZREVRANGE)
         Set<String> topUserIds = redisUtil.getTopRankers("leaderboard:weekly", offset, offset + limit - 1);
 
-        // 2. 각 userId별 정보 조회 → RankerDto 구성
+        // 2. 일괄 조회: User와 UserPoint를 한 번에 가져오기 (N+1 문제 해결)
+        List<String> topUserIdList = new ArrayList<>(topUserIds);
+        List<User> users = userRepository.findAllByEmailIn(topUserIdList);
+        List<UserPoint> userPoints = userPointRepository.findAllByUserIdIn(topUserIdList);
+
+        // Map으로 변환하여 빠른 조회
+        java.util.Map<String, User> userMap = users.stream()
+                .collect(java.util.stream.Collectors.toMap(User::getEmail, u -> u));
+        java.util.Map<String, UserPoint> userPointMap = userPoints.stream()
+                .collect(java.util.stream.Collectors.toMap(UserPoint::getUserId, up -> up));
+
+        // 3. RankerDto 구성
         List<RankerDto> topRankers = new ArrayList<>();
         int displayRank = 1; // 표시할 순위 (skip된 항목 제외)
 
         for (String topUserId : topUserIds) {
             // Skip system accounts and users without school from rankings
-            User user = userRepository.findByEmail(topUserId).orElse(null);
+            User user = userMap.get(topUserId);
             if (user == null || user.getIsSystemAccount() || user.getSchoolName() == null || user.getSchoolName().trim().isEmpty()) {
                 continue;
             }
 
-            UserPoint userPoint = userPointRepository.findByUserId(topUserId)
-                    .orElse(new UserPoint(topUserId));
+            UserPoint userPoint = userPointMap.getOrDefault(topUserId, new UserPoint(topUserId));
 
             RankerDto rankerDto = RankerDto.builder()
                     .userId(topUserId)
@@ -70,7 +80,7 @@ public class RankingService {
             topRankers.add(rankerDto);
         }
 
-        // 3. 내 랭킹 정보 조회
+        // 4. 내 랭킹 정보 조회
         UserPoint myUserPoint = userPointRepository.findByUserId(userId)
                 .orElse(new UserPoint(userId));
 
@@ -82,8 +92,14 @@ public class RankingService {
         // Calculate my actual rank by counting valid users above me
         Long myActualRank = null;
         Set<String> allUserIds = redisUtil.getTopRankers("leaderboard:weekly", 0, -1); // Get all users from Redis
-        int actualRank = 1;
 
+        // 일괄 조회: 모든 사용자 정보를 한 번에 가져오기 (N+1 문제 해결)
+        List<String> allUserIdList = new ArrayList<>(allUserIds);
+        List<User> allUsers = userRepository.findAllByEmailIn(allUserIdList);
+        java.util.Map<String, User> allUserMap = allUsers.stream()
+                .collect(java.util.stream.Collectors.toMap(User::getEmail, u -> u));
+
+        int actualRank = 1;
         for (String otherId : allUserIds) {
             if (otherId.equals(userId)) {
                 myActualRank = (long) actualRank;
@@ -91,7 +107,7 @@ public class RankingService {
             }
 
             // Count only valid users (not system accounts and have school)
-            User otherUser = userRepository.findByEmail(otherId).orElse(null);
+            User otherUser = allUserMap.get(otherId);
             if (otherUser == null || otherUser.getIsSystemAccount() || otherUser.getSchoolName() == null || otherUser.getSchoolName().trim().isEmpty()) {
                 continue; // Skip invalid users
             }
@@ -106,7 +122,7 @@ public class RankingService {
                 .username(myUsername)
                 .build();
 
-        // 4. 응답 구성
+        // 5. 응답 구성
         PersonalRankingResponse response = PersonalRankingResponse.builder()
                 .topRankers(topRankers)
                 .myRank(myRank)
