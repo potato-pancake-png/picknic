@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { userService } from "./services/userService";
 import { voteService } from "./services/voteService";
 import { pointService } from "./services/pointService";
+import { notificationService, type NotificationDisplay } from "./services/notificationService";
 import { apiClient } from "./lib/api";
 import type { UserProfile } from "./types/user";
 import type { DailyLimitResponse } from "./types/point";
@@ -84,6 +85,29 @@ export default function App() {
     loadInitialData();
   }, [authStep]);
 
+  // Load notifications with polling
+  useEffect(() => {
+    const loadNotifications = async () => {
+      if (authStep !== "APP") return;
+
+      try {
+        const data = await notificationService.getNotifications();
+        setNotifications(data);
+      } catch (error) {
+        console.error('Failed to load notifications:', error);
+      }
+    };
+
+    if (authStep === "APP") {
+      // Initial load
+      loadNotifications();
+
+      // Poll every 30 seconds
+      const interval = setInterval(loadNotifications, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [authStep]);
+
   const loadInitialData = async () => {
     if (authStep !== "APP") return;
 
@@ -109,16 +133,7 @@ export default function App() {
   };
 
   // 알림 상태
-  const [notifications, setNotifications] = useState([
-    {
-      id: "notif-1",
-      title: "🔥 학교 투표 참여 현황",
-      message: "지금 우리 학교 학생 68%는 '겨울 교복보다 하복이 더 예쁘다'에 투표했어요!",
-      time: "5분 전",
-      voteId: "uniform-vote",
-      isRead: false,
-    },
-  ]);
+  const [notifications, setNotifications] = useState<NotificationDisplay[]>([]);
 
   const handleNotificationClick = (voteId: string) => {
     // 전체 탭으로 이동
@@ -138,12 +153,17 @@ export default function App() {
     }, 300);
   };
 
-  const handleMarkAsRead = (notificationId: string) => {
-    setNotifications(prev =>
-      prev.map(notif =>
-        notif.id === notificationId ? { ...notif, isRead: true } : notif
-      )
-    );
+  const handleMarkAsRead = async (notificationId: string) => {
+    try {
+      await notificationService.markAsRead(notificationId);
+      setNotifications(prev =>
+        prev.map(notif =>
+          notif.id === notificationId ? { ...notif, isRead: true } : notif
+        )
+      );
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+    }
   };
 
   const handleLoginSuccess = (user: any) => {
@@ -192,7 +212,7 @@ export default function App() {
   }
 
   // Computed values based on loaded data
-  const hotVotes = allVotesData.filter(vote => vote.totalVotes > 1000 || vote.isHot).slice(0, 10);
+  const hotVotes = allVotesData.filter(vote => vote.isHot).slice(0, 10);
   const schoolVotes = allVotesData.filter(vote => vote.schoolName);
   const allVotes = allVotesData;
 

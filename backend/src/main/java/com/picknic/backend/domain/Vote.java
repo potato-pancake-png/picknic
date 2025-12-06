@@ -52,6 +52,10 @@ public class Vote {
     @Builder.Default
     private Integer totalVotes = 0;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isHot = false;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {
@@ -89,5 +93,15 @@ public class Vote {
     // close 메서드 추가
     public void close() {
         this.isActive = false;
+        this.isHot = false;  // 투표 종료 시 Hot 상태도 자동 해제
+    }
+
+    // Hot 투표 관련 메서드
+    public void markAsHot() {
+        this.isHot = true;
+    }
+
+    public void unmarkAsHot() {
+        this.isHot = false;
     }
 }

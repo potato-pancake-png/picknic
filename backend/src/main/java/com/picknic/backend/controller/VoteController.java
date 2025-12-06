@@ -100,6 +100,14 @@ public class VoteController {
         return ApiResponse.success(response);
     }
 
+    // Hot 투표 상태 토글 (시스템 계정만 가능)
+    @PatchMapping("/{id}/hot")
+    public ApiResponse<VoteResponse> toggleHotStatus(@PathVariable Long id) {
+        String userId = securityUtils.getCurrentUserId();
+        VoteResponse response = voteService.toggleHotStatus(id, userId);
+        return ApiResponse.success(response);
+    }
+
     // 내가 만든 투표 목록
     @GetMapping("/my")
     public ApiResponse<List<VoteResponse>> getMyVotes() {

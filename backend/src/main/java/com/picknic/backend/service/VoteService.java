@@ -10,6 +10,7 @@ import com.picknic.backend.dto.vote.VoteAnalysisDto;
 import com.picknic.backend.dto.vote.VoteResponse;
 import com.picknic.backend.dto.vote.VoteResultResponse;
 import com.picknic.backend.entity.User;
+import com.picknic.backend.event.HotVoteEvent;
 import com.picknic.backend.event.VoteCompletedEvent;
 import com.picknic.backend.repository.UserRepository;
 import com.picknic.backend.repository.VoteOptionRepository;
@@ -275,6 +276,43 @@ public class VoteService {
 
         vote.close();
 
+        return VoteResponse.from(vote, false, null);
+    }
+
+    // Hot 투표 상태 토글 (시스템 계정만 가능)
+    public VoteResponse toggleHotStatus(Long voteId, String userId) {
+        // 1. 투표 조회
+        Vote vote = voteRepository.findByIdWithOptions(voteId)
+                .orElseThrow(() -> new IllegalArgumentException("투표를 찾을 수 없습니다."));
+
+        // 2. 시스템 계정 확인
+        User user = userRepository.findByEmail(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        if (!user.getIsSystemAccount()) {
+            throw new IllegalStateException("시스템 계정만 HOT 투표를 지정할 수 있습니다.");
+        }
+
+        // 3. Hot 상태 토글
+        boolean newHotStatus = !vote.getIsHot();
+        if (newHotStatus) {
+            vote.markAsHot();
+        } else {
+            vote.unmarkAsHot();
+        }
+
+        // 4. Hot으로 마킹된 경우에만 이벤트 발행 (알림 발송)
+        if (newHotStatus) {
+            eventPublisher.publishEvent(new HotVoteEvent(
+                    this,
+                    vote.getId(),
+                    vote.getTitle(),
+                    vote.getCategory(),
+                    true
+            ));
+        }
+
+        // 5. 응답 반환
         return VoteResponse.from(vote, false, null);
     }
 

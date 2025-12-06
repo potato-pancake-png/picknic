@@ -32,6 +32,7 @@ public class VoteResponse {
     private String schoolName;  // 학교명
     private String timeLeft;  // 남은 시간 (예: "23시간 남음", "30분 남음")
     private String status;  // 투표 상태 (active, closed, expired)
+    private Boolean isHot;  // HOT 투표 여부
 
     public static VoteResponse from(Vote vote, boolean hasVoted, Long selectedOptionId) {
         List<VoteOptionResponse> optionResponses = vote.getOptions().stream()
@@ -66,6 +67,7 @@ public class VoteResponse {
                 .schoolName(vote.getSchoolName())
                 .timeLeft(timeLeft)
                 .status(status)
+                .isHot(vote.getIsHot())
                 .build();
     }
 

@@ -98,6 +98,11 @@ export const voteService = {
     return convertToVote(response.data);
   },
 
+  async toggleHot(id: number): Promise<VoteResponse> {
+    const response = await apiClient.patch<ApiResponse<any>>(`/votes/${id}/hot`);
+    return convertToVote(response.data);
+  },
+
   async getMyVotes(): Promise<VoteResponse[]> {
     const response = await apiClient.get<ApiResponse<any[]>>('/votes/my');
     return response.data.map(convertToVote);
