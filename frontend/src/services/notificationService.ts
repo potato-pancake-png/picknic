@@ -1,5 +1,4 @@
-import { apiClient } from '../lib/api';
-import { ApiResponse } from '../types/api';
+import { apiClient, ApiResponse } from '../lib/api';
 
 export interface Notification {
   id: number;
