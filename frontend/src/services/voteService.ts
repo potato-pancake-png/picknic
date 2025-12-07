@@ -26,7 +26,7 @@ const convertToVote = (backendVote: any): any => {
     isHot: backendVote.isHot,
     timeLeft: backendVote.timeLeft, // Use actual time left from backend
     userVoted: backendVote.hasVoted ? String(backendVote.userSelectedOptionId) : null,
-    status: backendVote.isActive ? 'active' : 'closed',
+    status: backendVote.status, // Use backend calculated status (active, expired, closed)
     createdAt: backendVote.createdAt,
     creatorId: backendVote.creatorId,
     schoolName: backendVote.schoolName

@@ -45,7 +45,6 @@ export default function App() {
   const [authStep, setAuthStep] = useState<"LOGIN" | "SIGNUP" | "APP">("LOGIN");
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [signupData, setSignupData] = useState<{ email: string, providerId: string } | null>(null);
-
   const [verifiedSchool, setVerifiedSchool] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("hot");
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -124,7 +123,7 @@ export default function App() {
       // OPTIMIZATION: Load all data in parallel instead of sequentially
       const [profile, votes, limit] = await Promise.all([
         userService.getMyProfile(),
-        voteService.getVotes('active'),
+        voteService.getVotes(), // 모든 투표 가져오기 (마감된 투표도 포함)
         pointService.getDailyLimit()
       ]);
 
@@ -213,6 +212,47 @@ export default function App() {
     setAuthStep("LOGIN");
     setSignupData(null);
   };
+
+  // OAuth callback 처리 중 로딩 화면 표시
+  if (window.location.pathname === '/auth/callback' || (auth.isLoading && !auth.isAuthenticated)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black relative overflow-hidden">
+        {/* Background Effects */}
+        <div className="absolute inset-0 w-full h-full">
+          <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-lime-500/20 rounded-full blur-[120px] animate-pulse" style={{ animationDuration: '3s' }} />
+          <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-emerald-500/20 rounded-full blur-[120px] animate-pulse" style={{ animationDuration: '4s' }} />
+        </div>
+
+        <div className="flex flex-col items-center relative z-10">
+          {/* Logo */}
+          <div className="mb-6">
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-lime-400 to-emerald-500 shadow-lg shadow-lime-500/30 animate-pulse flex items-center justify-center" style={{ animationDuration: '2s' }}>
+              <Vote className="w-11 h-11 text-black" strokeWidth={2.5} />
+            </div>
+          </div>
+
+          {/* Loading Spinner */}
+          <div className="relative mb-6">
+            <Loader2 className="w-16 h-16 animate-spin text-lime-500" />
+            <div className="absolute inset-0 w-16 h-16 bg-lime-500/20 rounded-full blur-xl animate-pulse"></div>
+          </div>
+
+          {/* Loading Text */}
+          <div className="space-y-2 mb-4 text-center">
+            <p className="text-white text-2xl font-bold">인증 처리중...</p>
+            <p className="text-white/50 text-base">잠시만 기다려주세요</p>
+          </div>
+
+          {/* Loading Dots Animation */}
+          <div className="flex justify-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-lime-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-3 h-3 rounded-full bg-lime-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-3 h-3 rounded-full bg-lime-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (authStep === "LOGIN") {
     return (
