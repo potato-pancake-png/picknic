@@ -251,8 +251,9 @@ public class VoteService {
 
         // 제목, 설명, 카테고리, 마감일, 이미지 수정 (선택지는 불변)
         vote.updateInfo(request.getTitle(), request.getDescription(), request.getCategory(), request.getExpiresAt(), request.getImageUrl());
+        Vote savedVote = voteRepository.save(vote);
 
-        return VoteResponse.from(vote, false, null);
+        return VoteResponse.from(savedVote, false, null);
     }
 
     // 투표 삭제 (작성자 또는 시스템 계정만 가능)
@@ -285,8 +286,9 @@ public class VoteService {
         }
 
         vote.close();
+        Vote savedVote = voteRepository.save(vote);
 
-        return VoteResponse.from(vote, false, null);
+        return VoteResponse.from(savedVote, false, null);
     }
 
     // Hot 투표 상태 토글 (시스템 계정만 가능)
@@ -311,19 +313,22 @@ public class VoteService {
             vote.unmarkAsHot();
         }
 
-        // 4. Hot으로 마킹된 경우에만 이벤트 발행 (알림 발송)
+        // 4. 변경사항 저장 (명시적 영속화)
+        Vote savedVote = voteRepository.save(vote);
+
+        // 5. Hot으로 마킹된 경우에만 이벤트 발행 (알림 발송)
         if (newHotStatus) {
             eventPublisher.publishEvent(new HotVoteEvent(
                     this,
-                    vote.getId(),
-                    vote.getTitle(),
-                    vote.getCategory(),
+                    savedVote.getId(),
+                    savedVote.getTitle(),
+                    savedVote.getCategory(),
                     true
             ));
         }
 
-        // 5. 응답 반환
-        return VoteResponse.from(vote, false, null);
+        // 6. 응답 반환
+        return VoteResponse.from(savedVote, false, null);
     }
 
     // 내가 만든 투표 목록

@@ -71,6 +71,7 @@ export function VotingCard({ vote, onVote, onViewStats, onDelete, currentUserId,
     endY: 0
   });
   const [isTogglingHot, setIsTogglingHot] = useState(false);
+  const [isResultsProcessing, setIsResultsProcessing] = useState(false);
   const ballotBoxRef = useRef<HTMLDivElement>(null);
 
   // Check if vote is expired or closed
@@ -107,7 +108,13 @@ export function VotingCard({ vote, onVote, onViewStats, onDelete, currentUserId,
 
     setTimeout(() => {
       setHasVoted(true);
+      setIsResultsProcessing(true);  // Block results view temporarily
       onVote(vote.id, optionId);
+
+      // Allow results view after 800ms delay for backend transaction to commit
+      setTimeout(() => {
+        setIsResultsProcessing(false);
+      }, 800);
     }, 1200);
 
     setTimeout(() => {
@@ -599,6 +606,7 @@ export function VotingCard({ vote, onVote, onViewStats, onDelete, currentUserId,
             variant="ghost"
             className="w-full mt-4 gap-2 hover:bg-white/5 text-muted-foreground hover:text-white"
             onClick={() => onViewStats(vote)}
+            disabled={isResultsProcessing}
           >
             상세 통계 보기
             <ChevronRight className="w-4 h-4" />

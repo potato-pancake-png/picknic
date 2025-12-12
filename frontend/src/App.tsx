@@ -368,6 +368,9 @@ export default function App() {
         toast.info(`투표 생성 완료! (오늘의 포인트 획득 한도를 초과했습니다)`);
       }
 
+      // Navigate to all votes tab
+      setActiveTab("all");
+
       // Close modal
       setIsCreateModalOpen(false);
     } catch (error) {
@@ -664,16 +667,20 @@ export default function App() {
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {hotVotes.map((vote) => (
-                      <VotingCard
+                      <div
                         key={vote.id}
-                        vote={vote}
-                        onVote={handleVote}
-                        onViewStats={handleViewStats}
-                        onDelete={handleDeleteVote}
-                        onHotToggle={handleHotToggle}
-                        currentUserId={userProfile?.userId}
-                        isSystemAccount={userProfile?.isSystemAccount}
-                      />
+                        className="transition-all duration-300"
+                      >
+                        <VotingCard
+                          vote={vote}
+                          onVote={handleVote}
+                          onViewStats={handleViewStats}
+                          onDelete={handleDeleteVote}
+                          onHotToggle={handleHotToggle}
+                          currentUserId={userProfile?.userId}
+                          isSystemAccount={userProfile?.isSystemAccount}
+                        />
+                      </div>
                     ))}
                   </div>
                 </div>
